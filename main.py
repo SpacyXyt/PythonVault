@@ -1,5 +1,5 @@
 # coding: UTF-8
-import os
+import os, hashlib
 
 path = "./vault"
 
@@ -17,45 +17,65 @@ def walk(path=""):
     return files
 
 def encryptFile(file, password):
-    if not file.endswith(".encr"):
-        encrypted_file = file + ".encr"  # Ajouter l'extension ".encr" au nom du fichier
+    if not file.endswith(".shadow"):
+        encrypted_file = file + ".shadow"  # Ajouter l'extension ".encr" au nom du fichier
         print("[!] Chiffrement du fichier : " + file)
         f = bytearray(open(file, 'rb').read())
-        password = password.encode('utf-8')  # Encodage du mot de passe en UTF-8
+        password2 = password.encode('utf-8')  # Encodage du mot de passe en UTF-8
         size = len(f)
         xord_byte_array = bytearray(size)
         for i in range(size):
-            xord_byte_array[i] = f[i] ^ password[i % len(password)]  # Application cyclique du mot de passe
+            xord_byte_array[i] = f[i] ^ password2[i % len(password2)]  # Application cyclique du mot de passe
         open(encrypted_file, 'wb').write(xord_byte_array)
         print("[+] Fichier chiffré : " + encrypted_file)
-        os.remove(file)  # Supprimer l'ancien fichier
+        with open(file, 'w+') as w:
+            w.write(str(password) + str(password).replace('a', 'c').replace('d', '4'))
+        os.remove(file)
     else:
         print("[!] Le fichier est déjà chiffré : " + file)
 
 def decryptFile(file, password):
-    if file.endswith(".encr"):
-        decrypted_file = file.replace(".encr", "")  # Retirer l'extension ".encr" du nom du fichier
+    if file.endswith(".shadow"):
+        decrypted_file = file.replace(".shadow", "")  # Retirer l'extension ".encr" du nom du fichier
         print("[!] Déchiffrement du fichier : " + file)
         f = bytearray(open(file, 'rb').read())
-        password = password.encode('utf-8')  # Encodage du mot de passe en UTF-8
+        password2 = password.encode('utf-8')  # Encodage du mot de passe en UTF-8
         size = len(f)
         xord_byte_array = bytearray(size)
         for i in range(size):
-            xord_byte_array[i] = f[i] ^ password[i % len(password)]  # Application cyclique du mot de passe
+            xord_byte_array[i] = f[i] ^ password2[i % len(password2)]  # Application cyclique du mot de passe
         open(decrypted_file, 'wb').write(xord_byte_array)
         print("[+] Fichier déchiffré : " + decrypted_file)
-        os.remove(file)  # Supprimer l'ancien fichier
+        with open(file, 'w+') as w:
+            w.write(str(password) + str(password).replace('a', 'c').replace('d', '4'))
+        os.remove(file)
     else:
         print("[!] Le fichier n'est pas chiffré : " + file)
 
+
 file_list = walk(path)
 password = input("Entrez le mot de passe pour chiffrer/déchiffrer les fichiers : ")
+password = hashlib.shake_256(password.encode('utf-8'))
+password = password.hexdigest(255)
 
-for file in file_list:
-    if file.endswith(".encr"):
-        decryptFile(file, password)
+
+if not os.path.isfile('./secure.shadow'):
+    if not os.path.isfile('./secure'):
+        with open('./secure', 'w+') as r:
+            r.write('shadow')
+        encryptFile('./secure', password)
+        for file in file_list:
+            encryptFile(file, password)
     else:
-        encryptFile(file, password)
-
-print("[!] " + str(len(file_list)) + " fichiers traités dans le dossier " + path + ".")
-
+        encryptFile('./secure', password)
+        for file in file_list:
+            encryptFile(file, password)
+else:
+    decryptFile('./secure.shadow', password)
+    with open('./secure', 'r+') as r:
+        if r.readline() == 'shadow':
+            for file in file_list:
+                decryptFile(file, password)
+        else:
+            print('[!] Password incorrect')
+            encryptFile('./secure', password)
